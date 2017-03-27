@@ -1,25 +1,49 @@
+#include "Arduino.h"
 #include <WiFi.h>
 #include <TinkerKit.h>
+#include <SPI.h>
 
 /*
- * Arduino Parameters
+ * Entries - Exits
  */
 #define AL_STATUS_DEFAULT -1
 #define AL_STATUS_ENTRY 0
 #define AL_STATUS_EXIT 1
-#define AL_DISTANCE 11
-#define AL_MINIMUM_LUX 200
-#define AL_DELAY_MS 750
-#define AL_LED_OUTPUT 10
-
-//#define AL_SSID "some_ssid"
-//#define AL_PASS "some_pass"
 
 /*
- * Vendor Parameters
+ * LUX - Ambient Light Sensor
  */
+#define AL_MINIMUM_LUX 200
+
+/*
+ * LED GPIO 
+ */
+#define AL_LED_OUTPUT_DEBUG A5
+#define AL_LED_OUTPUT_RED 10
+#define AL_LED_OUTPUT_GREEN 9
+#define AL_LED_OUTPUT_BLUE 8
+
+/*
+ * WPA2 PSK
+ */
+#ifdef COMPILE_WITH_SSID
+
+#define AL_SSID "some_ssid"
+#define AL_PASS "some_pass"
+
+#endif
+
+/*
+ * VENDOR / DISTANCE
+ */
+#define SHARP_AL_DISTANCE 11
 #define SHARP_UPPER_THRESHOLD 37
 #define SHARP_LOWER_THRESHoLD 4
+
+/*
+ * MISC
+ */
+#define AL_DELAY_MS 750
 
 /*
  * Fsensor => PORT A1 => Sensor inside room
@@ -32,7 +56,7 @@
 /*
  * Sensor Information
  */
-typedef struct SensorInfo {
+struct SensorInfo {
     uint16_t last_timestamp;
     uint16_t last_distance;
     uint16_t timestamp;
@@ -43,7 +67,7 @@ typedef struct SensorInfo {
 /*
  * Room Information
  */
-typedef struct RoomInfo {
+struct RoomInfo {
     uint16_t person_count;
     uint16_t lux;
 };
@@ -52,7 +76,7 @@ typedef struct RoomInfo {
  * System State
  */
 
-#ifdef AL_SSID
+#ifdef COMPILE_WITH_SSID
 int wifi_status;
 #endif
 
@@ -62,22 +86,34 @@ SensorInfo* al_ssensor;
 RoomInfo* al_room;
 TKLightSensor al_ldr(I0);
 
+void _blink(uint16_t times);
+uint16_t _getDistance(uint16_t sensor);
+void _reset_sensor(SensorInfo* s, uint16_t pin);
+void _setColor(uint16_t red, uint16_t green, uint16_t blue);
+
+void _debug_ldr_sensor(RoomInfo* room);
+void _debug_ir_sensors(uint16_t pin, SensorInfo* sensor);
+
 /*
  * Boot System
  */
 void setup() {
     Serial.begin(9600);
-    pinMode(AL_LED_OUTPUT, OUTPUT);
+    pinMode(AL_LED_OUTPUT_RED, OUTPUT);
+    pinMode(AL_LED_OUTPUT_GREEN, OUTPUT);
+    pinMode(AL_LED_OUTPUT_BLUE, OUTPUT);
+
+    pinMode(AL_LED_OUTPUT_DEBUG, OUTPUT);
 
     // Allocate space on the heap for sensor information
-    al_fsensor = malloc(sizeof(SensorInfo));
-    al_ssensor = malloc(sizeof(SensorInfo));
-    al_room = malloc(sizeof(RoomInfo));
+    al_fsensor = (SensorInfo*) malloc(sizeof(SensorInfo));
+    al_ssensor = (SensorInfo*) malloc(sizeof(SensorInfo));
+    al_room = (RoomInfo*) malloc(sizeof(RoomInfo));
 
     // Keep state of the current status of system.
     al_ir_status = AL_STATUS_DEFAULT;
 
-#ifdef AL_SSID
+#ifdef COMPILE_WITH_SSID
     // Keep state of the current status of system.
     wifi_status = WL_IDLE_STATUS;
 
@@ -95,16 +131,6 @@ void setup() {
     _reset_sensor(al_ssensor, A2);
 
     _blink(10);
-}
-
-void _blink(uint16_t times) {
-    while(times != 0) {
-        digitalWrite(AL_LED_OUTPUT, HIGH);
-        delay(200);
-        digitalWrite(AL_LED_OUTPUT, LOW);
-        delay(200);
-        times--;
-    }
 }
 
 /*
@@ -137,13 +163,23 @@ void loop () {
 
     // Light off - Light on
     if(al_room->lux < AL_MINIMUM_LUX) {
-        digitalWrite(AL_LED_OUTPUT, HIGH);
+        _setColor(0, 0, 255);
     } else {
-        digitalWrite(AL_LED_OUTPUT, LOW);
+        _setColor(0, 0, 0);
     }
 
     // Slow down a bit the execution time,
     delay(AL_DELAY_MS);
+}
+
+void _blink(uint16_t times) {
+    while(times != 0) {
+        digitalWrite(AL_LED_OUTPUT_DEBUG, HIGH);
+        delay(200);
+        digitalWrite(AL_LED_OUTPUT_DEBUG, LOW);
+        delay(200);
+        times--;
+    }
 }
 
 uint16_t _getDistance(uint16_t sensor) {
@@ -180,4 +216,10 @@ void _debug_ir_sensors(uint16_t pin, SensorInfo* sensor) {
     Serial.print(sensor->last_timestamp);
     Serial.println(" ms");
 
+}
+
+void _setColor(uint16_t red, uint16_t green, uint16_t blue) {
+  analogWrite(AL_LED_OUTPUT_RED, red);
+  analogWrite(AL_LED_OUTPUT_GREEN, green);
+  analogWrite(AL_LED_OUTPUT_BLUE, blue); 
 }
