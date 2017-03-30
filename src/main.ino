@@ -6,7 +6,7 @@
 /*
  * Entries - Exits
  */
-#define AL_STATUS_DEFAULT -1
+#define AL_STATUS_IDLE -1
 #define AL_STATUS_ENTRY 0
 #define AL_STATUS_EXIT 1
 
@@ -16,7 +16,7 @@
 #define AL_MINIMUM_LUX 200
 
 /*
- * LED GPIO 
+ * LED's GPIO
  */
 #define AL_LED_OUTPUT_DEBUG A5
 #define AL_LED_OUTPUT_RED 10
@@ -46,21 +46,11 @@
 #define AL_DELAY_MS 750
 
 /*
- * Fsensor => PORT A1 => Sensor inside room
- * Ssensor => PORT A2 => Sensor outside room
- *
- * LED => PORT 10
- * LDR Sensor => PORT I0
- */
-
-/*
  * Sensor Information
  */
 struct SensorInfo {
-    uint16_t last_timestamp;
-    uint16_t last_distance;
-    uint16_t timestamp;
-    uint16_t distance;
+    unsigned long timestamp;
+    uint16_t status;
     uint16_t pin;
 };
 
@@ -80,16 +70,14 @@ struct RoomInfo {
 int wifi_status;
 #endif
 
-int al_ir_status;
 SensorInfo* al_fsensor;
 SensorInfo* al_ssensor;
 RoomInfo* al_room;
 TKLightSensor al_ldr(I0);
 
 void _blink(uint16_t times);
-uint16_t _getDistance(uint16_t sensor);
 void _reset_sensor(SensorInfo* s, uint16_t pin);
-void _setColor(uint16_t red, uint16_t green, uint16_t blue);
+void _set_color(uint16_t red, uint16_t green, uint16_t blue);
 
 void _debug_ldr_sensor(RoomInfo* room);
 void _debug_ir_sensors(uint16_t pin, SensorInfo* sensor);
@@ -99,22 +87,19 @@ void _debug_ir_sensors(uint16_t pin, SensorInfo* sensor);
  */
 void setup() {
     Serial.begin(9600);
+
+    pinMode(AL_LED_OUTPUT_DEBUG, OUTPUT);
     pinMode(AL_LED_OUTPUT_RED, OUTPUT);
     pinMode(AL_LED_OUTPUT_GREEN, OUTPUT);
     pinMode(AL_LED_OUTPUT_BLUE, OUTPUT);
-
-    pinMode(AL_LED_OUTPUT_DEBUG, OUTPUT);
 
     // Allocate space on the heap for sensor information
     al_fsensor = (SensorInfo*) malloc(sizeof(SensorInfo));
     al_ssensor = (SensorInfo*) malloc(sizeof(SensorInfo));
     al_room = (RoomInfo*) malloc(sizeof(RoomInfo));
 
-    // Keep state of the current status of system.
-    al_ir_status = AL_STATUS_DEFAULT;
-
 #ifdef COMPILE_WITH_SSID
-    // Keep state of the current status of system.
+    // Keep state of the current status of wifi board.
     wifi_status = WL_IDLE_STATUS;
 
     while ( WiFi.status() == WL_NO_SHIELD ) { Serial.println("WiFi shield not present, please insert it to proceed the execution"); }
@@ -130,30 +115,18 @@ void setup() {
     _reset_sensor(al_fsensor, A1);
     _reset_sensor(al_ssensor, A2);
 
-    _blink(10);
+    _blink(3);
 }
 
 /*
  * System Procedures
  */
 void loop () {
-    // We should keep some history
-    if(al_fsensor->distance != 0 || al_ssensor->distance != 0) {
-        al_ir_status = AL_STATUS_DEFAULT;
-
-        al_fsensor->last_distance = al_fsensor->distance;
-        al_fsensor->last_timestamp = al_fsensor->timestamp;
-        al_ssensor->last_distance = al_ssensor->distance;
-        al_ssensor->last_timestamp = al_ssensor->timestamp;
-    }
-
-    // Set the distance
-    al_fsensor->distance = _getDistance(al_fsensor->pin);
+    // Set the detection (WIP / Placeholder: Need new sensors to develop this)
     al_fsensor->timestamp = millis();
-    al_ssensor->distance = _getDistance(al_ssensor->pin);
     al_ssensor->timestamp = millis();
 
-    // Read lux value
+    // Read Lux value
     al_room->lux = al_ldr.read();
 
     // Debug
@@ -163,9 +136,9 @@ void loop () {
 
     // Light off - Light on
     if(al_room->lux < AL_MINIMUM_LUX) {
-        _setColor(0, 0, 255);
+        _set_color(135, 206, 235); // SkyBlue
     } else {
-        _setColor(0, 0, 0);
+        _set_color(0, 0, 0);
     }
 
     // Slow down a bit the execution time,
@@ -182,14 +155,8 @@ void _blink(uint16_t times) {
     }
 }
 
-uint16_t _getDistance(uint16_t sensor) {
-    return 13 * pow(analogRead(sensor) * 0.0048828125 , -1);
-}
-
 void _reset_sensor(SensorInfo* s, uint16_t pin) {
-    s->last_distance = SHARP_UPPER_THRESHOLD;
-    s->last_timestamp = 0;
-    s->distance = 0;
+    s->status = AL_STATUS_IDLE;
     s->timestamp = 0;
     s->pin = pin;
 }
@@ -198,27 +165,20 @@ void _reset_sensor(SensorInfo* s, uint16_t pin) {
  * System Debug
  */
 void _debug_ldr_sensor(RoomInfo* room) {
-    Serial.println();
+    Serial.println("------------------------------");
     Serial.print("Lux Level: ");
     Serial.println(room->lux);
 }
 
 void _debug_ir_sensors(uint16_t pin, SensorInfo* sensor) {
-    Serial.print("Sensor ");
-    Serial.print(pin);
-    Serial.print(" ");
-    Serial.print(sensor->distance);
-    Serial.print("cm ");
-    Serial.print(sensor->timestamp);
-    Serial.print(" ms ");
-    Serial.print(sensor->last_distance);
-    Serial.print("cm ");
-    Serial.print(sensor->last_timestamp);
-    Serial.println(" ms");
+    char _to_print[100];
 
+    sprintf(_to_print, "Sensor %d -> Last Dectection: %lu ms", pin, sensor->timestamp, sensor->status);
+
+    Serial.println(_to_print);
 }
 
-void _setColor(uint16_t red, uint16_t green, uint16_t blue) {
+void _set_color(uint16_t red, uint16_t green, uint16_t blue) {
   analogWrite(AL_LED_OUTPUT_RED, red);
   analogWrite(AL_LED_OUTPUT_GREEN, green);
   analogWrite(AL_LED_OUTPUT_BLUE, blue); 
