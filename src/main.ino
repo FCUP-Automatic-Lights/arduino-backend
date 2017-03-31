@@ -11,9 +11,14 @@
 #define AL_STATUS_EXIT 1
 
 /*
+ * IR Sensors
+ */
+#define AL_STD_THRESHOLD 990
+
+/*
  * LUX - Ambient Light Sensor
  */
-#define AL_MINIMUM_LUX 200
+#define AL_MINIMUM_LUX 450
 
 /*
  * LED's GPIO
@@ -43,7 +48,7 @@
 /*
  * MISC
  */
-#define AL_DELAY_MS 750
+#define AL_DELAY_MS 1000
 
 /*
  * Sensor Information
@@ -112,8 +117,8 @@ void setup() {
 #endif
 
     // Setup Sensors
-    _reset_sensor(al_fsensor, A1);
-    _reset_sensor(al_ssensor, A2);
+    _reset_sensor(al_fsensor, A3);
+    _reset_sensor(al_ssensor, A4);
 
     _blink(3);
 }
@@ -124,25 +129,27 @@ void setup() {
 void loop () {
     // Set the detection (WIP / Placeholder: Need new sensors to develop this)
     al_fsensor->timestamp = millis();
+    al_fsensor->status = analogRead(al_fsensor->pin);
     al_ssensor->timestamp = millis();
+    al_ssensor->status = analogRead(al_ssensor->pin);
 
     // Read Lux value
     al_room->lux = al_ldr.read();
 
     // Debug
-    _debug_ldr_sensor(al_room);
-    _debug_ir_sensors(1, al_fsensor);
+    //_debug_ldr_sensor(al_room);
+    //_debug_ir_sensors(1, al_fsensor);
     _debug_ir_sensors(2, al_ssensor);
 
     // Light off - Light on
-    if(al_room->lux < AL_MINIMUM_LUX) {
-        _set_color(135, 206, 235); // SkyBlue
+    if(al_room->lux < AL_MINIMUM_LUX && al_fsensor->status > AL_STD_THRESHOLD && al_ssensor->status > AL_STD_THRESHOLD) {
+        _set_color(0,0, 255); // Blue
     } else {
         _set_color(0, 0, 0);
     }
 
     // Slow down a bit the execution time,
-    delay(AL_DELAY_MS);
+    //delay(AL_DELAY_MS);
 }
 
 void _blink(uint16_t times) {
@@ -173,7 +180,7 @@ void _debug_ldr_sensor(RoomInfo* room) {
 void _debug_ir_sensors(uint16_t pin, SensorInfo* sensor) {
     char _to_print[100];
 
-    sprintf(_to_print, "Sensor %d -> Last Dectection: %lu ms", pin, sensor->timestamp, sensor->status);
+    sprintf(_to_print, "Sensor %d -> Last Detection: %lu ms -> Status: %d", pin, sensor->timestamp, sensor->status);
 
     Serial.println(_to_print);
 }
