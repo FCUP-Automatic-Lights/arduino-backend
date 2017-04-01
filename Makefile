@@ -3,13 +3,13 @@ default:  monitor
 build:
 	platformio run
 
-upload-wifi:
-	platformio run --environment uno-wifi --target upload
+upload-debug:
+	platformio run --environment uno-debug --target upload
 
 upload:
 	platformio run --target upload
 
-wifi: upload-wifi
+debug: upload-debug
 	platformio device monitor
 
 monitor: upload
