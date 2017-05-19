@@ -29,7 +29,7 @@
 /*
  * MISC
  */
-#define AL_DELAY_MS 0
+#define AL_DELAY_MS 500
 
 SensorInfo *al_fsensor;
 SensorInfo *al_ssensor;
@@ -38,6 +38,7 @@ TKLightSensor al_ldr(AL_LDR);
 
 int registered_user;
 int turn_on;
+String incomingByte;
 
 /*
  * Boot System
@@ -59,7 +60,7 @@ void setup() {
     _reset_room(al_room);
 
     // Initial Parameters
-    registered_user = 0;
+    registered_user = 1;
     turn_on = 0;
 }
 
@@ -68,10 +69,10 @@ void setup() {
  */
 void loop() {
     if (Serial.available() > 0) {
-       String incomingByte = Serial.readString();
+      incomingByte = Serial.readString();
 
-      registered_user = atoi(incomingByte.charAt(0));
-      turn_on = atoi(incomingByte.charAt(2));
+      registered_user = incomingByte.charAt(0) - '0';
+      turn_on = incomingByte.charAt(2) - '0';
     }
 
     _envAnalysis(registered_user, turn_on);
@@ -88,6 +89,7 @@ void _reset_room(RoomInfo *r) {
     r->lux                 = 0;
     r->total_time          = 0;
     r->lights_initial_time = 0;
+    r->remote              = 0;
     r->lights_on           = AL_ACTIVATED;
 }
 
@@ -131,19 +133,18 @@ void _envAnalysis(int registered_user, int turn_on) {
     if(al_room->lux < AL_MINIMUM_LUX && ((al_room->person_count >= 1 && registered_user == 1 && turn_on == 0) || (turn_on == 1 && registered_user == 0)) && al_room->lights_on == AL_DEACTIVATED) {
         digitalWrite(AL_LIGHT, HIGH);
         al_room->lights_on = AL_ACTIVATED;
+
+        if (turn_on == 1) {
+            al_room->remote = 1;
+        }
+
         al_room->lights_initial_time = millis();
-    } else if (al_room->lights_on == AL_ACTIVATED && (al_room->lux >= AL_MINIMUM_LUX || al_room->person_count == 0 || registered_user == 0 || turn_on == -1)) {
+    } else if (al_room->lights_on == AL_ACTIVATED && (al_room->lux >= AL_MINIMUM_LUX || (al_room->person_count == 0 && al_room->remote != 1) || (registered_user == 0 && al_room->remote != 1) || (registered_user == 0 && turn_on == 2))) {
         digitalWrite(AL_LIGHT, LOW);
         al_room->lights_on = AL_DEACTIVATED;
+        al_room->remote = 0;
         al_room->total_time = millis() - al_room->lights_initial_time;
     }
-
-    if ((turn_on == -1 && al_room->lights_on == AL_DEACTIVATED) || // Turn off
-        (turn_on == 1  && al_room->lights_on == AL_ACTIVATED )) {  // Turn on
-        al_room->success = 1;
-    }
-
-    al_room->success = 0;
 }
 
 void _reset_sensor(SensorInfo *s, int pin) {
@@ -175,13 +176,11 @@ void _debug_room() {
     char _to_print[100];
     int total_time = al_room->lights_on == AL_DEACTIVATED && al_room->total_time > 10 ? al_room->total_time : 0;
 
-    sprintf(_to_print, "PC : %d | L : %d | T : %d | LS : %d", al_room->person_count, al_room->lux, total_time, al_room->success);
+    sprintf(_to_print, "PC : %d | L : %d | T : %d | S : %d", al_room->person_count, al_room->lux, total_time, al_room->lights_on);
 
     if(total_time) {
         al_room->total_time = 0;
     }
-
-    al_room->success = -1;
 
     Serial.println(_to_print);
 }

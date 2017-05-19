@@ -17,5 +17,5 @@ struct RoomInfo {
   int lights_on;
   int total_time;
   int lights_initial_time;
-  int success;
+  int remote;
 };
